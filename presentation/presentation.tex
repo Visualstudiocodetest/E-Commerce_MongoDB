@@ -232,7 +232,7 @@
 db.users.insertOne({ first_name: "Ada", role: "customer" })
 db.products.insertMany([ { name: "A" }, { name: "B" } ])
 
-// Recherche + filtres avancés
+// Recherche + filtres avances
 db.products.find({ price: { $gte: 50, $lte: 300 } })
 db.products.find({ $or: [ { tags: "sale" }, { stock: 0 } ] })
 db.products.find({ name: { $regex: "pro", $options: "i" } })
