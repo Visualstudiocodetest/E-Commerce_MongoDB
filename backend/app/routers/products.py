@@ -1,9 +1,10 @@
 """Products endpoints — showcases advanced filters, projections, sorting and $lookup joins."""
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from ..auth import require_admin
 from ..database import get_db
 from ..utils import serialize, to_object_id
 
@@ -118,7 +119,7 @@ def get_product(product_id: str):
     return serialize(docs[0])
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, dependencies=[Depends(require_admin)])
 def create_product(payload: ProductIn):
     doc = payload.model_dump()
     doc["category_id"] = to_object_id(doc["category_id"])
@@ -128,7 +129,7 @@ def create_product(payload: ProductIn):
     return serialize(db.products.find_one({"_id": result.inserted_id}))
 
 
-@router.patch("/{product_id}")
+@router.patch("/{product_id}", dependencies=[Depends(require_admin)])
 def update_product(product_id: str, payload: dict):
     """Partial update. Casts category_id/supplier_id to ObjectId when present."""
     allowed = {"name", "description", "price", "stock", "tags", "category_id", "supplier_id"}
@@ -144,7 +145,7 @@ def update_product(product_id: str, payload: dict):
     return serialize(db.products.find_one({"_id": to_object_id(product_id)}))
 
 
-@router.post("/{product_id}/restock")
+@router.post("/{product_id}/restock", dependencies=[Depends(require_admin)])
 def restock(product_id: str, amount: int = Query(..., gt=0)):
     """Atomic stock increment using $inc."""
     result = db.products.update_one(
@@ -155,7 +156,7 @@ def restock(product_id: str, amount: int = Query(..., gt=0)):
     return serialize(db.products.find_one({"_id": to_object_id(product_id)}))
 
 
-@router.delete("/{product_id}", status_code=204)
+@router.delete("/{product_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_product(product_id: str):
     result = db.products.delete_one({"_id": to_object_id(product_id)})
     if result.deleted_count == 0:
