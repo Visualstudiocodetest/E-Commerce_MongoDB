@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
-// Mongo Shop — minimal vanilla-JS SPA talking to the FastAPI / MongoDB backend.
+// Mongo Shop — vanilla-JS SPA with JWT authentication.
 // ---------------------------------------------------------------------------
 const API = "/api";
-const state = { user: null, categories: [], filters: {} };
+const state = { user: null, token: null, categories: [], filters: {} };
 
 const EMOJI = {
   Electronics: "📱", Books: "📚", Clothing: "👕", "Home & Kitchen": "🍳",
@@ -12,10 +12,13 @@ const EMOJI = {
 
 // ---- helpers --------------------------------------------------------------
 async function api(path, options = {}) {
-  const res = await fetch(API + path, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
+  const headers = { "Content-Type": "application/json" };
+  if (state.token) headers["Authorization"] = `Bearer ${state.token}`;
+  const res = await fetch(API + path, { headers, ...options });
+  if (res.status === 401) {
+    logout();
+    throw new Error("Session expirée, veuillez vous reconnecter.");
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || res.statusText);
@@ -34,8 +37,199 @@ function notify(message, type = "success") {
   setTimeout(() => el.classList.add("d-none"), 3000);
 }
 
+// ---- auth -----------------------------------------------------------------
+function saveSession(data) {
+  state.token = data.token;
+  state.user = data.user._id;
+  localStorage.setItem("token", data.token);
+  localStorage.setItem("user", JSON.stringify(data.user));
+}
+
+function loadSession() {
+  const token = localStorage.getItem("token");
+  const user = localStorage.getItem("user");
+  if (token && user) {
+    state.token = token;
+    state.user = JSON.parse(user)._id;
+    return JSON.parse(user);
+  }
+  return null;
+}
+
+function logout() {
+  state.token = null;
+  state.user = null;
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  updateNavbar(null);
+  renderLogin();
+}
+
+function updateNavbar(user) {
+  const nav = document.getElementById("mainNav");
+  const userInfo = document.getElementById("userInfo");
+  const cartBtn = document.getElementById("cartBtn");
+  const logoutBtn = document.getElementById("logoutBtn");
+
+  if (user) {
+    nav.classList.remove("d-none");
+    userInfo.textContent = `${user.first_name} ${user.last_name}`;
+    userInfo.classList.remove("d-none");
+    cartBtn.classList.remove("d-none");
+    logoutBtn.classList.remove("d-none");
+  } else {
+    nav.classList.add("d-none");
+    userInfo.classList.add("d-none");
+    cartBtn.classList.add("d-none");
+    logoutBtn.classList.add("d-none");
+  }
+}
+
+// ---- login view -----------------------------------------------------------
+function renderLogin() {
+  view().innerHTML = `
+    <div class="row justify-content-center mt-5">
+      <div class="col-md-5">
+        <div class="card shadow-sm">
+          <div class="card-body p-4">
+            <h3 class="text-center mb-4">🍃 Connexion</h3>
+            <form id="loginForm">
+              <div class="mb-3">
+                <label class="form-label">Email</label>
+                <input type="email" id="loginEmail" class="form-control" required placeholder="votre@email.com">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Mot de passe</label>
+                <input type="password" id="loginPassword" class="form-control" required placeholder="••••••">
+              </div>
+              <div id="loginError" class="text-danger small mb-2 d-none"></div>
+              <button type="submit" class="btn btn-success w-100">Se connecter</button>
+            </form>
+            <hr>
+            <p class="text-center text-muted mb-0">
+              Pas encore de compte ?
+              <a href="#" id="goSignup" class="text-success fw-semibold">Créer un compte</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById("loginError");
+    errEl.classList.add("d-none");
+    try {
+      const data = await api("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          email: document.getElementById("loginEmail").value.trim(),
+          password: document.getElementById("loginPassword").value,
+        }),
+      });
+      saveSession(data);
+      await startApp(data.user);
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove("d-none");
+    }
+  });
+
+  document.getElementById("goSignup").addEventListener("click", (e) => {
+    e.preventDefault();
+    renderSignup();
+  });
+}
+
+// ---- signup view ----------------------------------------------------------
+function renderSignup() {
+  view().innerHTML = `
+    <div class="row justify-content-center mt-5">
+      <div class="col-md-5">
+        <div class="card shadow-sm">
+          <div class="card-body p-4">
+            <h3 class="text-center mb-4">🍃 Créer un compte</h3>
+            <form id="signupForm">
+              <div class="row g-2 mb-3">
+                <div class="col">
+                  <label class="form-label">Prénom</label>
+                  <input type="text" id="regFirst" class="form-control" required placeholder="Jean">
+                </div>
+                <div class="col">
+                  <label class="form-label">Nom</label>
+                  <input type="text" id="regLast" class="form-control" required placeholder="Dupont">
+                </div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Email</label>
+                <input type="email" id="regEmail" class="form-control" required placeholder="votre@email.com">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Téléphone <span class="text-muted">(optionnel)</span></label>
+                <input type="tel" id="regPhone" class="form-control" placeholder="+41 79 000 00 00">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Mot de passe</label>
+                <input type="password" id="regPassword" class="form-control" required minlength="6" placeholder="6 caractères minimum">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Confirmer le mot de passe</label>
+                <input type="password" id="regConfirm" class="form-control" required minlength="6" placeholder="••••••">
+              </div>
+              <div id="signupError" class="text-danger small mb-2 d-none"></div>
+              <button type="submit" class="btn btn-success w-100">Créer mon compte</button>
+            </form>
+            <hr>
+            <p class="text-center text-muted mb-0">
+              Déjà un compte ?
+              <a href="#" id="goLogin" class="text-success fw-semibold">Se connecter</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById("signupForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById("signupError");
+    errEl.classList.add("d-none");
+    const password = document.getElementById("regPassword").value;
+    const confirm = document.getElementById("regConfirm").value;
+    if (password !== confirm) {
+      errEl.textContent = "Les mots de passe ne correspondent pas.";
+      errEl.classList.remove("d-none");
+      return;
+    }
+    try {
+      const data = await api("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({
+          first_name: document.getElementById("regFirst").value.trim(),
+          last_name: document.getElementById("regLast").value.trim(),
+          email: document.getElementById("regEmail").value.trim(),
+          password,
+          phone: document.getElementById("regPhone").value.trim() || null,
+        }),
+      });
+      saveSession(data);
+      notify("Compte créé avec succès !");
+      await startApp(data.user);
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove("d-none");
+    }
+  });
+
+  document.getElementById("goLogin").addEventListener("click", (e) => {
+    e.preventDefault();
+    renderLogin();
+  });
+}
+
 // ---- bootstrap ------------------------------------------------------------
-async function init() {
+async function startApp(user) {
+  updateNavbar(user);
+
   document.querySelectorAll("[data-view]").forEach((a) =>
     a.addEventListener("click", (e) => {
       e.preventDefault();
@@ -43,23 +237,35 @@ async function init() {
     })
   );
 
-  const users = await api("/users");
-  const sel = document.getElementById("userSelect");
-  sel.innerHTML = users
-    .map((u) => `<option value="${u._id}">${u.first_name} ${u.last_name}</option>`)
-    .join("");
-  state.user = users[0]?._id;
-  sel.addEventListener("change", (e) => {
-    state.user = e.target.value;
-    refreshCartBadge();
-  });
+  document.getElementById("logoutBtn").onclick = (e) => {
+    e.preventDefault();
+    logout();
+  };
 
   state.categories = await api("/categories");
   await refreshCartBadge();
   route("catalog");
 }
 
+async function init() {
+  const user = loadSession();
+  if (user) {
+    try {
+      const fresh = await api("/auth/me");
+      state.user = fresh._id;
+      localStorage.setItem("user", JSON.stringify(fresh));
+      await startApp(fresh);
+    } catch {
+      logout();
+    }
+  } else {
+    updateNavbar(null);
+    renderLogin();
+  }
+}
+
 function route(name) {
+  if (!state.token) { renderLogin(); return; }
   ({ catalog: renderCatalog, cart: renderCart, orders: renderOrders, dashboard: renderDashboard }[name] ||
     renderCatalog)();
 }
