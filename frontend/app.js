@@ -2,6 +2,7 @@
 // Mongo Shop — vanilla-JS SPA with JWT authentication.
 // ---------------------------------------------------------------------------
 const API = "/api";
+const state = { user: null, users: [], categories: [], filters: {} };
 const state = { user: null, token: null, categories: [], filters: {} };
 
 const EMOJI = {
@@ -12,6 +13,13 @@ const EMOJI = {
 
 // ---- helpers --------------------------------------------------------------
 async function api(path, options = {}) {
+  const res = await fetch(API + path, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(state.user ? { "X-User-Id": state.user } : {}),
+    },
+    ...options,
+  });
   const headers = { "Content-Type": "application/json" };
   if (state.token) headers["Authorization"] = `Bearer ${state.token}`;
   const res = await fetch(API + path, { headers, ...options });
@@ -29,6 +37,20 @@ async function api(path, options = {}) {
 const view = () => document.getElementById("view");
 const money = (n) => (n ?? 0).toLocaleString("fr-CH", { style: "currency", currency: "CHF" });
 const stars = (r) => "★".repeat(Math.round(r || 0)) + "☆".repeat(5 - Math.round(r || 0));
+
+// ---- rôle / affichage conditionnel ----------------------------------------
+function isAdmin() {
+  return state.users.find((u) => u._id === state.user)?.role === "admin";
+}
+
+function updateAdminUI() {
+  const admin = isAdmin();
+  document.querySelectorAll(".admin-only").forEach((el) => el.classList.toggle("d-none", !admin));
+  // Si l'utilisateur courant perd les droits admin alors qu'il consultait la page Admin, on le renvoie au catalogue.
+  if (!admin && state.currentView === "admin") {
+    route("catalog");
+  }
+}
 
 function notify(message, type = "success") {
   const el = document.getElementById("alert");
@@ -237,12 +259,25 @@ async function startApp(user) {
     })
   );
 
+  const users = await api("/users");
+  state.users = users;
+  const sel = document.getElementById("userSelect");
+  sel.innerHTML = users
+    .map((u) => `<option value="${u._id}">${u.first_name} ${u.last_name}${u.role === "admin" ? " (admin)" : ""}</option>`)
+    .join("");
+  state.user = users[0]?._id;
+  sel.addEventListener("change", (e) => {
+    state.user = e.target.value;
+    updateAdminUI();
+    refreshCartBadge();
+  });
   document.getElementById("logoutBtn").onclick = (e) => {
     e.preventDefault();
     logout();
   };
 
   state.categories = await api("/categories");
+  updateAdminUI();
   await refreshCartBadge();
   route("catalog");
 }
@@ -265,6 +300,14 @@ async function init() {
 }
 
 function route(name) {
+  state.currentView = name;
+  ({
+    catalog: renderCatalog,
+    cart: renderCart,
+    orders: renderOrders,
+    dashboard: renderDashboard,
+    admin: renderAdmin,
+  }[name] || renderCatalog)();
   if (!state.token) { renderLogin(); return; }
   ({ catalog: renderCatalog, cart: renderCart, orders: renderOrders, dashboard: renderDashboard }[name] ||
     renderCatalog)();
@@ -620,6 +663,135 @@ async function renderDashboard() {
             <td class="text-end">${s.count} cmd — ${money(s.revenue)}</td></tr>`)
           .join("")}</tbody></table></div></div>
     </div>`;
+}
+
+// ---- admin : ajout de produit & gestion du stock ---------------------------
+async function renderAdmin() {
+  if (!isAdmin()) {
+    view().innerHTML = `<div class="alert alert-danger">Accès réservé aux administrateurs.</div>`;
+    return;
+  }
+
+  const [productsData, suppliers, lowStock] = await Promise.all([
+    api("/products?limit=200&sort_by=name&order=asc"),
+    api("/suppliers"),
+    api("/analytics/low-stock"),
+  ]);
+  state.suppliers = suppliers;
+  const products = productsData.items;
+
+  const catOptions = state.categories.map((c) => `<option value="${c._id}">${c.name}</option>`).join("");
+  const supOptions = suppliers.map((s) => `<option value="${s._id}">${s.name}</option>`).join("");
+
+  view().innerHTML = `
+    <h3 class="mb-3">⚙️ Administration — Produits &amp; Stock</h3>
+
+    ${
+      lowStock.length
+        ? `<div class="alert alert-warning">
+            <strong>Stock faible :</strong>
+            ${lowStock.map((p) => `${p.name} (${p.stock} restant${p.stock > 1 ? "s" : ""})`).join(", ")}
+          </div>`
+        : ""
+    }
+
+    <div class="card p-3 mb-4">
+      <h5>Ajouter un produit</h5>
+      <form id="newProductForm" class="row g-2">
+        <div class="col-md-4"><input id="npName" class="form-control" placeholder="Nom du produit" required></div>
+        <div class="col-md-4"><input id="npDesc" class="form-control" placeholder="Description"></div>
+        <div class="col-md-2"><input id="npPrice" type="number" min="0.01" step="0.01" class="form-control" placeholder="Prix (CHF)" required></div>
+        <div class="col-md-2"><input id="npStock" type="number" min="0" step="1" class="form-control" placeholder="Stock initial" value="0" required></div>
+        <div class="col-md-4">
+          <select id="npCategory" class="form-select" required><option value="">Catégorie...</option>${catOptions}</select>
+        </div>
+        <div class="col-md-4">
+          <select id="npSupplier" class="form-select" required><option value="">Fournisseur...</option>${supOptions}</select>
+        </div>
+        <div class="col-md-4"><input id="npTags" class="form-control" placeholder="tags séparés par des virgules"></div>
+        <div class="col-12"><button class="btn btn-success" type="submit">Créer le produit</button></div>
+      </form>
+    </div>
+
+    <div class="card p-3">
+      <h5>Catalogue — gestion du stock</h5>
+      <table class="table align-middle">
+        <thead><tr><th>Produit</th><th>Catégorie</th><th>Prix</th><th>Stock</th><th style="width:260px">Réapprovisionner</th><th></th></tr></thead>
+        <tbody>
+          ${products
+            .map(
+              (p) => `<tr>
+                <td>${p.name}</td>
+                <td>${catName(p.category_id)}</td>
+                <td>${money(p.price)}</td>
+                <td><span class="badge ${p.stock <= 0 ? "bg-secondary" : "bg-success-subtle text-success-emphasis"}">${p.stock}</span></td>
+                <td>
+                  <div class="input-group input-group-sm">
+                    <input type="number" class="form-control" data-stock-input="${p._id}" placeholder="qté" min="1" value="10">
+                    <button class="btn btn-outline-success" data-restock="${p._id}">+ Réappro.</button>
+                  </div>
+                </td>
+                <td><button class="btn btn-sm btn-outline-danger" data-del-product="${p._id}">Supprimer</button></td>
+              </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById("newProductForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      await api("/products", {
+        method: "POST",
+        body: JSON.stringify({
+          name: document.getElementById("npName").value.trim(),
+          description: document.getElementById("npDesc").value.trim() || null,
+          price: parseFloat(document.getElementById("npPrice").value),
+          stock: parseInt(document.getElementById("npStock").value, 10),
+          category_id: document.getElementById("npCategory").value,
+          supplier_id: document.getElementById("npSupplier").value,
+          tags: document
+            .getElementById("npTags")
+            .value.split(",")
+            .map((t) => t.trim())
+            .filter(Boolean),
+        }),
+      });
+      notify("Produit créé !");
+      renderAdmin();
+    } catch (err) {
+      notify(err.message, "danger");
+    }
+  });
+
+  document.querySelectorAll("[data-restock]").forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.restock;
+      const amount = parseInt(document.querySelector(`[data-stock-input="${id}"]`).value, 10) || 0;
+      if (amount <= 0) return notify("Quantité invalide", "danger");
+      try {
+        await api(`/products/${id}/restock?amount=${amount}`, { method: "POST" });
+        notify("Stock mis à jour");
+        renderAdmin();
+      } catch (err) {
+        notify(err.message, "danger");
+      }
+    })
+  );
+
+  document.querySelectorAll("[data-del-product]").forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      if (!confirm("Supprimer ce produit ?")) return;
+      try {
+        await api(`/products/${btn.dataset.delProduct}`, { method: "DELETE" });
+        notify("Produit supprimé");
+        renderAdmin();
+      } catch (err) {
+        notify(err.message, "danger");
+      }
+    })
+  );
 }
 
 init().catch((e) => notify("Erreur d'initialisation : " + e.message, "danger"));

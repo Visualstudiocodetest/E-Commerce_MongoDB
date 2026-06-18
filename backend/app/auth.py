@@ -1,3 +1,16 @@
+"""Lightweight role-based access control.
+
+Le projet ne dispose pas d'un système de login (pas de mot de passe / JWT) :
+le frontend simule la session via un sélecteur d'utilisateur. On formalise
+cette simulation côté API en exigeant un header `X-User-Id` sur les routes
+sensibles, puis on vérifie le rôle de l'utilisateur correspondant en base.
+
+Ça reste volontairement simple (pas de token signé), mais ça centralise la
+règle "qui a le droit de faire quoi" dans un seul endroit réutilisable par
+tous les routers, plutôt que de la dupliquer dans chaque endpoint.
+"""
+
+
 """JWT authentication utilities and FastAPI dependency."""
 from datetime import datetime, timedelta, timezone
 
@@ -11,6 +24,20 @@ from .database import get_db
 from .utils import serialize, to_object_id
 
 bearer_scheme = HTTPBearer()
+
+from fastapi import Depends, Header, HTTPException
+
+from .database import get_db
+from .utils import to_object_id
+
+db = get_db()
+
+
+def require_admin(user: dict = Depends(get_current_user)) -> dict:
+    """Dépendance à brancher sur les routes réservées aux admins."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Action réservée aux administrateurs")
+    return user
 
 
 def hash_password(password: str) -> str:
