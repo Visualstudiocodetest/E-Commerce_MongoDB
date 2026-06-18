@@ -10,6 +10,7 @@ from .database import get_db
 from .routers import (
     addresses,
     analytics,
+    auth,
     carts,
     categories,
     orders,
@@ -34,6 +35,7 @@ app.add_middleware(
 )
 
 for module in (
+    auth,
     users,
     categories,
     suppliers,
