@@ -2,10 +2,11 @@
 
 Application e-commerce complète (frontend + backend + MongoDB) réalisée pour le projet
 final de la formation MongoDB. Le backend est en **Python / FastAPI**, le frontend est une
-**SPA Bootstrap**, et la base de données est un **cluster MongoDB Atlas**.
+**SPA Bootstrap**, et la base de données est un **cluster MongoDB Atlas** (ou MongoDB local / Docker).
 
 ## Fonctionnalités
 
+- **Authentification** : inscription, connexion et déconnexion avec JWT + bcrypt
 - Gestion des **utilisateurs**, **produits**, **catégories**, **fournisseurs**, **adresses**
 - **Panier** d'achat, **commandes**, **paiements** (simulés) et **avis clients**
 - Catalogue avec **filtres avancés**, recherche, tri et pagination
@@ -15,14 +16,16 @@ final de la formation MongoDB. Le backend est en **Python / FastAPI**, le fronte
 ## Architecture
 
 ```
-Frontend (HTML/JS + Bootstrap)  ->  Backend (FastAPI + PyMongo)  ->  MongoDB Atlas
+Frontend (HTML/JS + Bootstrap)  ->  Backend (FastAPI + PyMongo)  ->  MongoDB (Atlas / local / Docker)
+                                       |
+                                   JWT Auth (bcrypt + python-jose)
 ```
 
 ## Modèle de données — 10 collections
 
 | Collection      | Rôle                              | Références              |
 |-----------------|-----------------------------------|-------------------------|
-| `users`         | Clients et admins                 | —                       |
+| `users`         | Clients et admins (+ password_hash) | —                     |
 | `categories`    | Catégories de produits            | —                       |
 | `suppliers`     | Fournisseurs                      | —                       |
 | `products`      | Catalogue                         | category_id, supplier_id|
@@ -36,7 +39,10 @@ Frontend (HTML/JS + Bootstrap)  ->  Backend (FastAPI + PyMongo)  ->  MongoDB Atl
 ## Prérequis
 
 - Python 3.11+
-- Un cluster MongoDB Atlas (ou MongoDB local) et sa chaîne de connexion
+- MongoDB — au choix :
+  - **Docker** : `docker run -d -p 27017:27017 --name mongodb mongo:7`
+  - **MongoDB Atlas** (cluster cloud)
+  - **MongoDB local** installé sur la machine
 
 ## Installation
 
@@ -47,7 +53,7 @@ cd E-Commerce_MongoDB
 
 # 2. Créer le fichier .env à partir du modèle
 cp .env.example .env
-#    puis éditer .env et renseigner MONGODB_URI
+#    puis éditer .env et renseigner MONGODB_URI + JWT_SECRET
 
 # 3. Environnement virtuel + dépendances
 python -m venv .venv
@@ -58,8 +64,11 @@ pip install -r backend/requirements.txt
 ### Fichier `.env`
 
 ```env
-MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
+MONGODB_URI=mongodb://localhost:27017          # Docker / local
+# MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority  # Atlas
 DB_NAME=ecommerce
+JWT_SECRET=change-me-in-production-use-a-real-secret
+JWT_EXPIRE_MINUTES=1440
 ```
 
 ## Utilisation
@@ -80,6 +89,20 @@ uvicorn app.main:app --reload --app-dir backend
 - Frontend : http://localhost:8000/
 - Documentation API (Swagger) : http://localhost:8000/docs
 - Santé / connexion DB : http://localhost:8000/api/health
+
+## Authentification
+
+Le système d'authentification repose sur **JWT** (JSON Web Tokens) :
+
+| Endpoint              | Méthode | Description                          |
+|-----------------------|---------|--------------------------------------|
+| `/api/auth/register`  | POST    | Inscription (crée un compte + token) |
+| `/api/auth/login`     | POST    | Connexion (vérifie email/mot de passe, retourne un token) |
+| `/api/auth/me`        | GET     | Profil de l'utilisateur connecté (nécessite le token) |
+
+- Les mots de passe sont hachés avec **bcrypt** avant stockage
+- Le token JWT est valide 24 h par défaut (`JWT_EXPIRE_MINUTES`)
+- Le frontend stocke le token dans `localStorage` et l'envoie via le header `Authorization: Bearer <token>`
 
 ## Commandes MongoDB couvertes
 
@@ -104,10 +127,22 @@ Compilable directement sur **Overleaf** (ou via `pdflatex`) pour produire le PDF
 ├── backend/
 │   ├── app/
 │   │   ├── main.py            # point d'entrée FastAPI + service du frontend
-│   │   ├── config.py          # chargement du .env
+│   │   ├── config.py          # chargement du .env (MongoDB + JWT)
 │   │   ├── database.py        # connexion MongoDB
+│   │   ├── auth.py            # utilitaires JWT + bcrypt + dependency get_current_user
 │   │   ├── utils.py           # sérialisation ObjectId / dates
-│   │   └── routers/           # 1 module par domaine (users, products, orders...)
+│   │   └── routers/           # 1 module par domaine
+│   │       ├── auth.py        # register, login, me
+│   │       ├── users.py       # CRUD utilisateurs
+│   │       ├── products.py    # catalogue + filtres
+│   │       ├── categories.py  # catégories
+│   │       ├── suppliers.py   # fournisseurs
+│   │       ├── addresses.py   # adresses
+│   │       ├── carts.py       # panier
+│   │       ├── orders.py      # commandes
+│   │       ├── payments.py    # paiements
+│   │       ├── reviews.py     # avis clients
+│   │       └── analytics.py   # dashboard / agrégations
 │   ├── seed.py                # données de test + index
 │   ├── mongo_demo.py          # démonstration des commandes MongoDB
 │   └── requirements.txt
