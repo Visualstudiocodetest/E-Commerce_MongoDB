@@ -15,15 +15,16 @@
     <div class="container">
       <a class="navbar-brand fw-bold" href="#" data-view="catalog">🍃 Mongo Shop</a>
       <div class="d-flex gap-2 align-items-center">
-        <ul class="nav nav-pills">
+        <ul class="nav nav-pills" id="mainNav">
           <li class="nav-item"><a class="nav-link" href="#" data-view="catalog">Catalogue</a></li>
           <li class="nav-item"><a class="nav-link" href="#" data-view="orders">Commandes</a></li>
           <li class="nav-item"><a class="nav-link" href="#" data-view="dashboard">Dashboard</a></li>
         </ul>
-        <select id="userSelect" class="form-select form-select-sm" style="width:auto"></select>
-        <button class="btn btn-light position-relative" data-view="cart">
+        <span id="userInfo" class="text-white fw-semibold d-none"></span>
+        <button class="btn btn-light position-relative d-none" id="cartBtn" data-view="cart">
           🛒<span id="cartBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">0</span>
         </button>
+        <button class="btn btn-outline-light btn-sm d-none" id="logoutBtn">Déconnexion</button>
       </div>
     </div>
   </nav>

@@ -28,3 +28,8 @@ body {
 .cursor-pointer {
   cursor: pointer;
 }
+#loginForm .form-control:focus,
+#signupForm .form-control:focus {
+  border-color: #198754;
+  box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+}
