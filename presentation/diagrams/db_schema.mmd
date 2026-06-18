@@ -1,0 +1,88 @@
+%% Schéma de la base de données E-Commerce MongoDB (10 collections)
+%% Rendu PDF :  mmdc -i db_schema.mmd -o db_schema.pdf --pdfFit -t neutral
+erDiagram
+    USERS ||--o{ ADDRESSES : "possède"
+    USERS ||--o{ SHOPPING_CARTS : "détient"
+    USERS ||--o{ ORDERS : "passe"
+    USERS ||--o{ REVIEWS : "écrit"
+
+    CATEGORIES ||--o{ PRODUCTS : "classe"
+    SUPPLIERS  ||--o{ PRODUCTS : "fournit"
+
+    PRODUCTS ||--o{ ORDER_ITEMS : "figure dans"
+    PRODUCTS ||--o{ REVIEWS : "reçoit"
+
+    ORDERS ||--o{ ORDER_ITEMS : "contient"
+    ORDERS ||--|| PAYMENTS : "réglée par"
+
+    SHOPPING_CARTS }o--o{ PRODUCTS : "items[] (imbriqués)"
+
+    USERS {
+        ObjectId _id PK
+        string first_name
+        string last_name
+        string email UK
+        string role
+        date created_at
+    }
+    CATEGORIES {
+        ObjectId _id PK
+        string name
+        string slug UK
+    }
+    SUPPLIERS {
+        ObjectId _id PK
+        string name
+        string country
+        float rating
+    }
+    PRODUCTS {
+        ObjectId _id PK
+        string name
+        float price
+        int stock
+        ObjectId category_id FK
+        ObjectId supplier_id FK
+        array tags
+    }
+    ADDRESSES {
+        ObjectId _id PK
+        ObjectId user_id FK
+        string street
+        string city
+        string country
+    }
+    SHOPPING_CARTS {
+        ObjectId _id PK
+        ObjectId user_id FK
+        string status
+        array items
+    }
+    ORDERS {
+        ObjectId _id PK
+        ObjectId user_id FK
+        string status
+        float total
+        date created_at
+    }
+    ORDER_ITEMS {
+        ObjectId _id PK
+        ObjectId order_id FK
+        ObjectId product_id FK
+        int quantity
+        float subtotal
+    }
+    PAYMENTS {
+        ObjectId _id PK
+        ObjectId order_id FK
+        float amount
+        string method
+        string status
+    }
+    REVIEWS {
+        ObjectId _id PK
+        ObjectId product_id FK
+        ObjectId user_id FK
+        int rating
+        string comment
+    }
