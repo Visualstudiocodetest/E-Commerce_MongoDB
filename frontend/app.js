@@ -40,7 +40,8 @@ const stars = (r) => "★".repeat(Math.round(r || 0)) + "☆".repeat(5 - Math.ro
 
 // ---- rôle / affichage conditionnel ----------------------------------------
 function isAdmin() {
-  return state.users.find((u) => u._id === state.user)?.role === "admin";
+  // Le rôle provient de l'utilisateur réellement authentifié (token JWT), pas d'un sélecteur.
+  return state.role === "admin";
 }
 
 function updateAdminUI() {
@@ -63,6 +64,7 @@ function notify(message, type = "success") {
 function saveSession(data) {
   state.token = data.token;
   state.user = data.user._id;
+  state.role = data.user.role;
   localStorage.setItem("token", data.token);
   localStorage.setItem("user", JSON.stringify(data.user));
 }
@@ -71,9 +73,11 @@ function loadSession() {
   const token = localStorage.getItem("token");
   const user = localStorage.getItem("user");
   if (token && user) {
+    const parsed = JSON.parse(user);
     state.token = token;
-    state.user = JSON.parse(user)._id;
-    return JSON.parse(user);
+    state.user = parsed._id;
+    state.role = parsed.role;
+    return parsed;
   }
   return null;
 }
@@ -81,6 +85,7 @@ function loadSession() {
 function logout() {
   state.token = null;
   state.user = null;
+  state.role = null;
   localStorage.removeItem("token");
   localStorage.removeItem("user");
   updateNavbar(null);
@@ -250,6 +255,9 @@ function renderSignup() {
 
 // ---- bootstrap ------------------------------------------------------------
 async function startApp(user) {
+  // L'identité et le rôle proviennent de l'utilisateur authentifié (JWT).
+  state.user = user._id;
+  state.role = user.role;
   updateNavbar(user);
 
   document.querySelectorAll("[data-view]").forEach((a) =>
@@ -259,18 +267,6 @@ async function startApp(user) {
     })
   );
 
-  const users = await api("/users");
-  state.users = users;
-  const sel = document.getElementById("userSelect");
-  sel.innerHTML = users
-    .map((u) => `<option value="${u._id}">${u.first_name} ${u.last_name}${u.role === "admin" ? " (admin)" : ""}</option>`)
-    .join("");
-  state.user = users[0]?._id;
-  sel.addEventListener("change", (e) => {
-    state.user = e.target.value;
-    updateAdminUI();
-    refreshCartBadge();
-  });
   document.getElementById("logoutBtn").onclick = (e) => {
     e.preventDefault();
     logout();
@@ -300,6 +296,10 @@ async function init() {
 }
 
 function route(name) {
+  if (!state.token) {
+    renderLogin();
+    return;
+  }
   state.currentView = name;
   ({
     catalog: renderCatalog,
@@ -308,9 +308,6 @@ function route(name) {
     dashboard: renderDashboard,
     admin: renderAdmin,
   }[name] || renderCatalog)();
-  if (!state.token) { renderLogin(); return; }
-  ({ catalog: renderCatalog, cart: renderCart, orders: renderOrders, dashboard: renderDashboard }[name] ||
-    renderCatalog)();
 }
 
 // ---- catalog --------------------------------------------------------------

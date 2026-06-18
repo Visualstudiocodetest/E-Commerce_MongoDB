@@ -1,13 +1,19 @@
-"""Users CRUD endpoints — demonstrates insert, find, projection, update, delete."""
+"""Users management endpoints — admin-only (demonstrates find, projection, update, delete).
+
+L'inscription publique se fait via /auth/register ; ces routes servent à
+l'administration des comptes et sont donc toutes réservées aux administrateurs.
+"""
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, EmailStr, Field
 
+from ..auth import require_admin
 from ..database import get_db
 from ..utils import serialize, to_object_id
 
-router = APIRouter(prefix="/users", tags=["users"])
+# Toutes les routes de ce router exigent un administrateur authentifié.
+router = APIRouter(prefix="/users", tags=["users"], dependencies=[Depends(require_admin)])
 db = get_db()
 
 

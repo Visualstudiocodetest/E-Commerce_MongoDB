@@ -1,7 +1,8 @@
-"""Suppliers CRUD endpoints."""
-from fastapi import APIRouter, HTTPException
+"""Suppliers CRUD endpoints. Reads are public; writes are admin-only."""
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from ..auth import require_admin
 from ..database import get_db
 from ..utils import serialize, to_object_id
 
@@ -30,13 +31,13 @@ def get_supplier(supplier_id: str):
     return serialize(sup)
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, dependencies=[Depends(require_admin)])
 def create_supplier(payload: SupplierIn):
     result = db.suppliers.insert_one(payload.model_dump())
     return serialize(db.suppliers.find_one({"_id": result.inserted_id}))
 
 
-@router.delete("/{supplier_id}", status_code=204)
+@router.delete("/{supplier_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_supplier(supplier_id: str):
     result = db.suppliers.delete_one({"_id": to_object_id(supplier_id)})
     if result.deleted_count == 0:

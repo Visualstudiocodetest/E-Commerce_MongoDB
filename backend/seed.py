@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from faker import Faker
 from pymongo import ASCENDING, DESCENDING, TEXT
 
+from app.auth import hash_password
 from app.database import COLLECTIONS, get_db
 
 fake = Faker()
@@ -21,6 +22,10 @@ random.seed(42)
 
 db = get_db()
 NOW = datetime.now(timezone.utc)
+
+# Mot de passe par défaut des comptes de test (admin + clients) pour le login JWT.
+DEFAULT_PASSWORD = "password123"
+DEFAULT_PASSWORD_HASH = hash_password(DEFAULT_PASSWORD)
 
 
 def reset():
@@ -77,6 +82,7 @@ def seed_users():
             "last_name": "Admin",
             "email": "admin@shop.io",
             "role": "admin",
+            "password_hash": DEFAULT_PASSWORD_HASH,
             "phone": fake.phone_number(),
             "created_at": NOW - timedelta(days=400),
         }
@@ -89,6 +95,7 @@ def seed_users():
                 "last_name": last,
                 "email": f"{first.lower()}.{last.lower()}@example.com",
                 "role": "customer",
+                "password_hash": DEFAULT_PASSWORD_HASH,
                 "phone": fake.phone_number(),
                 "created_at": NOW - timedelta(days=random.randint(1, 365)),
             }
@@ -291,6 +298,9 @@ def main():
     print("\nSeed complete. Document counts:")
     for name in COLLECTIONS:
         print(f"  {name:16} {db[name].count_documents({}):>4}")
+    print("\nComptes de test (mot de passe commun) :")
+    print(f"  admin     : admin@shop.io / {DEFAULT_PASSWORD}")
+    print(f"  clients   : <prenom>.<nom>@example.com / {DEFAULT_PASSWORD}")
 
 
 if __name__ == "__main__":

@@ -1,9 +1,10 @@
 """Reviews endpoints — customer reviews per product, with rating aggregation."""
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from ..auth import require_admin
 from ..database import get_db
 from ..utils import serialize, to_object_id
 
@@ -73,8 +74,9 @@ def create_review(payload: ReviewIn):
     return serialize(db.reviews.find_one({"_id": result.inserted_id}))
 
 
-@router.delete("/{review_id}", status_code=204)
+@router.delete("/{review_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_review(review_id: str):
+    """Suppression d'un avis (modération) — réservée aux administrateurs."""
     result = db.reviews.delete_one({"_id": to_object_id(review_id)})
     if result.deleted_count == 0:
         raise HTTPException(404, "Review not found")
