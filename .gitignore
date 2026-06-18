@@ -1,0 +1,33 @@
+# Python
+*.__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# Environment
+.env
+*.env
+!.env.example
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.vrb
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Node (frontend tooling, if any)
+node_modules/
