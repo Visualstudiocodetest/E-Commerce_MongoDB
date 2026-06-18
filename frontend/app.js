@@ -2,8 +2,7 @@
 // Mongo Shop — vanilla-JS SPA with JWT authentication.
 // ---------------------------------------------------------------------------
 const API = "/api";
-const state = { user: null, users: [], categories: [], filters: {} };
-const state = { user: null, token: null, categories: [], filters: {} };
+const state = { user: null, role: null, token: null, categories: [], filters: {} };
 
 const EMOJI = {
   Electronics: "📱", Books: "📚", Clothing: "👕", "Home & Kitchen": "🍳",
@@ -13,13 +12,6 @@ const EMOJI = {
 
 // ---- helpers --------------------------------------------------------------
 async function api(path, options = {}) {
-  const res = await fetch(API + path, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(state.user ? { "X-User-Id": state.user } : {}),
-    },
-    ...options,
-  });
   const headers = { "Content-Type": "application/json" };
   if (state.token) headers["Authorization"] = `Bearer ${state.token}`;
   const res = await fetch(API + path, { headers, ...options });
