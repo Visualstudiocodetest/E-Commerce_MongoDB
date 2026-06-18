@@ -1,9 +1,10 @@
 """Orders endpoints — creates an order plus order_items, decrements stock, and joins via $lookup."""
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from ..auth import require_admin
 from ..database import get_db
 from ..utils import serialize, to_object_id
 
@@ -123,8 +124,9 @@ def create_order(payload: OrderIn):
     return serialize(db.orders.find_one({"_id": order_id}))
 
 
-@router.patch("/{order_id}/status")
+@router.patch("/{order_id}/status", dependencies=[Depends(require_admin)])
 def update_status(order_id: str, status: str):
+    """Changement de statut d'une commande — réservé aux administrateurs."""
     if status not in {"pending", "paid", "shipped", "delivered", "cancelled"}:
         raise HTTPException(400, "Invalid status")
     result = db.orders.update_one(

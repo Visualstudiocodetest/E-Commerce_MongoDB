@@ -2,9 +2,10 @@
 import random
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from ..auth import require_admin
 from ..database import get_db
 from ..utils import serialize, to_object_id
 
@@ -17,8 +18,9 @@ class PaymentIn(BaseModel):
     method: str = "card"  # card | paypal | transfer
 
 
-@router.get("")
+@router.get("", dependencies=[Depends(require_admin)])
 def list_payments(status: str | None = None):
+    """Liste de tous les paiements — réservée aux administrateurs."""
     query = {"status": status} if status else {}
     return serialize(list(db.payments.find(query).sort("created_at", -1)))
 

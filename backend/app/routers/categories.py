@@ -1,7 +1,8 @@
-"""Categories CRUD endpoints."""
-from fastapi import APIRouter, HTTPException
+"""Categories CRUD endpoints. Reads are public; writes are admin-only."""
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from ..auth import require_admin
 from ..database import get_db
 from ..utils import serialize, to_object_id
 
@@ -28,7 +29,7 @@ def get_category(category_id: str):
     return serialize(cat)
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, dependencies=[Depends(require_admin)])
 def create_category(payload: CategoryIn):
     if db.categories.find_one({"slug": payload.slug}):
         raise HTTPException(409, "Slug already exists")
@@ -36,7 +37,7 @@ def create_category(payload: CategoryIn):
     return serialize(db.categories.find_one({"_id": result.inserted_id}))
 
 
-@router.patch("/{category_id}")
+@router.patch("/{category_id}", dependencies=[Depends(require_admin)])
 def update_category(category_id: str, payload: CategoryIn):
     result = db.categories.update_one(
         {"_id": to_object_id(category_id)}, {"$set": payload.model_dump()}
@@ -46,7 +47,7 @@ def update_category(category_id: str, payload: CategoryIn):
     return serialize(db.categories.find_one({"_id": to_object_id(category_id)}))
 
 
-@router.delete("/{category_id}", status_code=204)
+@router.delete("/{category_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_category(category_id: str):
     result = db.categories.delete_one({"_id": to_object_id(category_id)})
     if result.deleted_count == 0:
